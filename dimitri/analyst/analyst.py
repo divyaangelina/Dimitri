@@ -52,23 +52,32 @@ class Analyst:
 
         prices = MappingProxyType(dict(game_state.market.prices))
         market_inventory = MappingProxyType(dict(game_state.market.inventory))
+        money = game_state.player.money
+        inventory_total_value = _priced_total(
+            game_state.player.inventory.items, prices
+        )
+        seed_total_cost = _priced_total(game_state.player.seeds, prices)
 
         return Analysis(
             current_day=game_state.day,
             current_hour=game_state.hour,
             days_remaining=SEASON_LENGTH_DAYS - game_state.day,
-            current_money=game_state.player.money,
+            current_money=money,
             unlocked_tiles=empty + occupied,
             locked_tiles=locked,
             occupied_tiles=occupied,
             empty_tiles=empty,
             market_prices=prices,
             market_inventory=market_inventory,
-            inventory_total_value=_priced_total(
-                game_state.player.inventory.items, prices
-            ),
-            seed_total_cost=_priced_total(game_state.player.seeds, prices),
+            inventory_total_value=inventory_total_value,
+            seed_total_cost=seed_total_cost,
             economic_opportunities=_economic_opportunities(prices),
+            cash_plus_inventory_value=money + inventory_total_value,
+            cash_after_seed_replacement=money - seed_total_cost,
+            affordable_market_items=tuple(
+                item for item, price in prices.items() if price <= money
+            ),
+            has_empty_farm_capacity=empty > 0,
         )
 
 

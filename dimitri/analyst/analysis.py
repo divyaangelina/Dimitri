@@ -57,6 +57,15 @@ class Analysis:
         economic_opportunities: One EconomicOpportunity per item in
             GameState.market.prices, in the same order as that
             mapping. These are unranked facts, not recommendations.
+        cash_plus_inventory_value: current_money plus
+            inventory_total_value.
+        cash_after_seed_replacement: current_money minus
+            seed_total_cost. May be negative.
+        affordable_market_items: Every item in market_prices whose
+            price is less than or equal to current_money, in the same
+            order as market_prices. This describes what the current
+            balance covers; it is not a ranking or a recommendation.
+        has_empty_farm_capacity: True if empty_tiles > 0.
     """
 
     current_day: int
@@ -72,3 +81,7 @@ class Analysis:
     inventory_total_value: int
     seed_total_cost: int
     economic_opportunities: tuple[EconomicOpportunity, ...]
+    cash_plus_inventory_value: int
+    cash_after_seed_replacement: int
+    affordable_market_items: tuple[str, ...]
+    has_empty_farm_capacity: bool

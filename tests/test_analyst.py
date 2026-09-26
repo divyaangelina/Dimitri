@@ -310,3 +310,129 @@ def test_opportunities_leave_game_state_unchanged():
     Analyst().analyze(game_state)
 
     assert game_state == before
+
+
+def test_cash_plus_inventory_value():
+    shed = {"WHEAT": 4, "EGG": 3}
+    analysis = Analyst().analyze(
+        _make_game_state(money=1000, shed=shed, prices=PRICES)
+    )
+
+    assert analysis.cash_plus_inventory_value == 1000 + 4 * 25 + 3 * 50
+
+
+def test_cash_after_seed_replacement():
+    seeds = {"WHEAT": 5, "CARROT": 2}
+    analysis = Analyst().analyze(
+        _make_game_state(money=1000, seeds=seeds, prices=PRICES)
+    )
+
+    assert analysis.cash_after_seed_replacement == 1000 - (5 * 25 + 2 * 35)
+
+
+def test_cash_after_seed_replacement_can_be_negative():
+    analysis = Analyst().analyze(
+        _make_game_state(money=10, seeds={"MILK": 1}, prices=PRICES)
+    )
+
+    assert analysis.cash_after_seed_replacement == 10 - 160
+
+
+def test_affordable_market_items_are_exactly_affordable_items():
+    analysis = Analyst().analyze(_make_game_state(money=40, prices=PRICES))
+
+    assert analysis.affordable_market_items == ("WHEAT", "CARROT")
+
+
+def test_affordable_market_items_preserve_price_ordering():
+    prices = {"MILK": 160, "WHEAT": 25, "EGG": 50, "CARROT": 35}
+    analysis = Analyst().analyze(_make_game_state(money=100, prices=prices))
+
+    assert analysis.affordable_market_items == ("WHEAT", "EGG", "CARROT")
+
+
+def test_item_priced_exactly_at_money_is_affordable():
+    analysis = Analyst().analyze(_make_game_state(money=50, prices=PRICES))
+
+    assert "EGG" in analysis.affordable_market_items
+
+
+def test_item_priced_above_money_is_not_affordable():
+    analysis = Analyst().analyze(_make_game_state(money=49, prices=PRICES))
+
+    assert "EGG" not in analysis.affordable_market_items
+    assert "MILK" not in analysis.affordable_market_items
+
+
+def test_no_affordable_items_for_empty_market():
+    analysis = Analyst().analyze(_make_game_state(prices={}))
+
+    assert analysis.affordable_market_items == ()
+
+
+def test_has_empty_farm_capacity_true_with_empty_tile():
+    tiles = [["LOCKED", WHEAT_TILE, None]]
+    analysis = Analyst().analyze(_make_game_state(tiles=tiles))
+
+    assert analysis.has_empty_farm_capacity is True
+
+
+def test_has_empty_farm_capacity_false_when_full():
+    tiles = [["LOCKED", WHEAT_TILE, COW_TILE]]
+    analysis = Analyst().analyze(_make_game_state(tiles=tiles))
+
+    assert analysis.has_empty_farm_capacity is False
+
+
+def test_has_empty_farm_capacity_false_when_all_locked():
+    tiles = [["LOCKED"] * 3]
+    analysis = Analyst().analyze(_make_game_state(tiles=tiles))
+
+    assert analysis.has_empty_farm_capacity is False
+
+
+def test_inference_fields_are_immutable():
+    analysis = Analyst().analyze(_make_game_state(prices=PRICES))
+
+    assert isinstance(analysis.affordable_market_items, tuple)
+    with pytest.raises(FrozenInstanceError):
+        analysis.cash_plus_inventory_value = 0
+    with pytest.raises(FrozenInstanceError):
+        analysis.cash_after_seed_replacement = 0
+    with pytest.raises(FrozenInstanceError):
+        analysis.affordable_market_items = ()
+    with pytest.raises(FrozenInstanceError):
+        analysis.has_empty_farm_capacity = False
+
+
+def test_mutating_source_mappings_does_not_change_inferences():
+    prices = dict(PRICES)
+    shed = {"WHEAT": 4}
+    seeds = {"CARROT": 2}
+    game_state = _make_game_state(money=100, shed=shed, seeds=seeds, prices=prices)
+    analysis = Analyst().analyze(game_state)
+
+    prices["WHEAT"] = 999
+    prices["CHEAP"] = 1
+    del prices["EGG"]
+    shed["WHEAT"] = 1000
+    seeds["CARROT"] = 1000
+
+    assert analysis.cash_plus_inventory_value == 100 + 4 * 25
+    assert analysis.cash_after_seed_replacement == 100 - 2 * 35
+    assert analysis.affordable_market_items == ("WHEAT", "CARROT", "EGG")
+
+
+def test_inferences_leave_game_state_unchanged():
+    game_state = _make_game_state(
+        money=100,
+        shed={"WHEAT": 2},
+        seeds={"CARROT": 3},
+        prices=dict(PRICES),
+    )
+    before = copy.deepcopy(game_state)
+
+    Analyst().analyze(game_state)
+
+    assert game_state == before
+    assert game_state.raw_observation == before.raw_observation
