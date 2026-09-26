@@ -14,6 +14,7 @@ never modifies the GameState or its raw observation.
 """
 
 from collections.abc import Mapping
+from types import MappingProxyType
 
 from dimitri.analyst.analysis import Analysis
 from dimitri.models.game_state import GameState
@@ -48,6 +49,9 @@ class Analyst:
                 elif isinstance(tile, Mapping):
                     occupied += 1
 
+        prices = MappingProxyType(dict(game_state.market.prices))
+        market_inventory = MappingProxyType(dict(game_state.market.inventory))
+
         return Analysis(
             current_day=game_state.day,
             current_hour=game_state.hour,
@@ -57,4 +61,19 @@ class Analyst:
             locked_tiles=locked,
             occupied_tiles=occupied,
             empty_tiles=empty,
+            market_prices=prices,
+            market_inventory=market_inventory,
+            inventory_total_value=_priced_total(
+                game_state.player.inventory.items, prices
+            ),
+            seed_total_cost=_priced_total(game_state.player.seeds, prices),
         )
+
+
+def _priced_total(quantities: Mapping[str, int], prices: Mapping[str, int]) -> int:
+    """Sum quantity * price over the entries that have a market price."""
+    return sum(
+        quantity * prices[name]
+        for name, quantity in quantities.items()
+        if name in prices
+    )

@@ -36,15 +36,24 @@ def _make_farm(tiles) -> Farm:
     )
 
 
-def _make_game_state(day=0, hour=0, money=3000, tiles=MIXED_TILES) -> GameState:
+def _make_game_state(
+    day=0,
+    hour=0,
+    money=3000,
+    tiles=MIXED_TILES,
+    shed=None,
+    seeds=None,
+    prices=None,
+    market_inventory=None,
+) -> GameState:
     return GameState(
         day=day,
         hour=hour,
         player=Player(
             player_id=0,
             money=money,
-            inventory=Inventory(items={"WHEAT": 2}),
-            seeds={"WHEAT": 5},
+            inventory=Inventory(items={"WHEAT": 2} if shed is None else shed),
+            seeds={"WHEAT": 5} if seeds is None else seeds,
             farm=_make_farm(tiles),
         ),
         opponent=Opponent(
@@ -52,7 +61,10 @@ def _make_game_state(day=0, hour=0, money=3000, tiles=MIXED_TILES) -> GameState:
             money=3000,
             farm=_make_farm([["LOCKED", None]]),
         ),
-        market=Market(prices={"WHEAT": 25}, inventory={"WHEAT": 10}),
+        market=Market(
+            prices={"WHEAT": 25} if prices is None else prices,
+            inventory={"WHEAT": 10} if market_inventory is None else market_inventory,
+        ),
         raw_observation={"day": day, "hour": hour},
     )
 
@@ -136,3 +148,94 @@ def test_analysis_is_immutable():
 
     with pytest.raises(FrozenInstanceError):
         analysis.current_money = 0
+
+
+PRICES = {"WHEAT": 25, "CARROT": 35, "EGG": 50, "MILK": 160}
+
+
+def test_market_prices_copied():
+    analysis = Analyst().analyze(_make_game_state(prices=PRICES))
+
+    assert analysis.market_prices == PRICES
+
+
+def test_market_inventory_copied():
+    supply = {"WHEAT": 10000, "EGG": 9000}
+    analysis = Analyst().analyze(_make_game_state(market_inventory=supply))
+
+    assert analysis.market_inventory == supply
+
+
+def test_inventory_total_value():
+    shed = {"WHEAT": 4, "EGG": 3, "MILK": 0}
+    analysis = Analyst().analyze(_make_game_state(shed=shed, prices=PRICES))
+
+    assert analysis.inventory_total_value == 4 * 25 + 3 * 50
+
+
+def test_seed_total_cost():
+    seeds = {"WHEAT": 5, "CARROT": 2}
+    analysis = Analyst().analyze(_make_game_state(seeds=seeds, prices=PRICES))
+
+    assert analysis.seed_total_cost == 5 * 25 + 2 * 35
+
+
+def test_unpriced_inventory_items_are_skipped():
+    shed = {"WHEAT": 2, "GOOSE": 7, "MYSTERY": 3}
+    analysis = Analyst().analyze(_make_game_state(shed=shed, prices=PRICES))
+
+    assert analysis.inventory_total_value == 2 * 25
+
+
+def test_unpriced_seed_types_are_skipped():
+    seeds = {"CARROT": 1, "PUMPKIN": 9}
+    analysis = Analyst().analyze(_make_game_state(seeds=seeds, prices=PRICES))
+
+    assert analysis.seed_total_cost == 35
+
+
+def test_empty_holdings_value_to_zero():
+    analysis = Analyst().analyze(_make_game_state(shed={}, seeds={}, prices=PRICES))
+
+    assert analysis.inventory_total_value == 0
+    assert analysis.seed_total_cost == 0
+
+
+def test_analysis_economic_fields_are_immutable():
+    analysis = Analyst().analyze(_make_game_state(prices=PRICES))
+
+    with pytest.raises(FrozenInstanceError):
+        analysis.inventory_total_value = 0
+    with pytest.raises(FrozenInstanceError):
+        analysis.market_prices = {}
+    with pytest.raises(TypeError):
+        analysis.market_prices["WHEAT"] = 1
+    with pytest.raises(TypeError):
+        analysis.market_inventory["WHEAT"] = 1
+
+
+def test_mutating_source_mappings_does_not_change_analysis():
+    prices = dict(PRICES)
+    supply = {"WHEAT": 10}
+    game_state = _make_game_state(prices=prices, market_inventory=supply)
+    analysis = Analyst().analyze(game_state)
+
+    prices["WHEAT"] = 999
+    prices["NEW"] = 1
+    supply["WHEAT"] = 0
+
+    assert analysis.market_prices == PRICES
+    assert analysis.market_inventory == {"WHEAT": 10}
+
+
+def test_economic_facts_leave_game_state_unchanged():
+    game_state = _make_game_state(
+        shed={"WHEAT": 2, "GOOSE": 1},
+        seeds={"CARROT": 3, "PUMPKIN": 1},
+        prices=dict(PRICES),
+    )
+    before = copy.deepcopy(game_state)
+
+    Analyst().analyze(game_state)
+
+    assert game_state == before

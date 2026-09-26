@@ -15,6 +15,7 @@ mutated after construction. Each new GameState produces a new Analysis
 rather than modifying an existing one.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 
@@ -38,6 +39,19 @@ class Analysis:
             a plant, weed, or animal structure.
         empty_tiles: The number of unlocked tiles on Dimitri's farm
             with nothing on them.
+        market_prices: A read-only snapshot of the current market
+            prices, copied from GameState.market.prices.
+        market_inventory: A read-only snapshot of the market's current
+            supply, copied from GameState.market.inventory.
+        inventory_total_value: The theoretical sale value of Dimitri's
+            shed inventory at current market prices: the sum of
+            quantity * price over items that have a market price.
+            Unpriced items contribute nothing. This is an accounting
+            fact, not a profit or expected-value figure.
+        seed_total_cost: The theoretical replacement cost of Dimitri's
+            held seeds at current market prices: the sum of
+            quantity * price over seed crops that have a market price.
+            Unpriced seeds contribute nothing.
     """
 
     current_day: int
@@ -48,3 +62,7 @@ class Analysis:
     locked_tiles: int
     occupied_tiles: int
     empty_tiles: int
+    market_prices: Mapping[str, int]
+    market_inventory: Mapping[str, int]
+    inventory_total_value: int
+    seed_total_cost: int
