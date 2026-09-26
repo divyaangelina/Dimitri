@@ -2,9 +2,10 @@
 
 The Parser is the boundary between the Kaggle environment's raw
 observation dictionary and Dimitri's internal, immutable data models
-(GameState, Player, Inventory, Market). Everything on the Kaggle side
-of that boundary is untyped, nested dictionaries and lists; everything
-on Dimitri's side is structured, typed, immutable data.
+(GameState, Player, Opponent, Farm, Inventory, Market). Everything on
+the Kaggle side of that boundary is untyped, nested dictionaries and
+lists; everything on Dimitri's side is structured, typed, immutable
+data.
 
 The Parser performs translation only. It extracts values from the raw
 observation and uses them to construct model objects — nothing more.
@@ -25,9 +26,11 @@ into Dimitri's decision-making.
 from collections.abc import Mapping
 from typing import Any
 
+from dimitri.models.farm import Farm
 from dimitri.models.game_state import GameState
 from dimitri.models.inventory import Inventory
 from dimitri.models.market import Market
+from dimitri.models.opponent import Opponent
 from dimitri.models.player import Player
 
 
@@ -65,13 +68,16 @@ def parse(observation: dict) -> GameState:
             from ``observation`` or is not shaped as expected.
     """
     day = _parse_day(observation)
-    inventory = _parse_inventory(observation)
-    player = _parse_player(observation, inventory)
+    hour = _parse_hour(observation)
+    player = _parse_player(observation)
+    opponent = _parse_opponent(observation)
     market = _parse_market(observation)
 
     return GameState(
         day=day,
+        hour=hour,
         player=player,
+        opponent=opponent,
         market=market,
         raw_observation=observation,
     )
@@ -82,42 +88,106 @@ def _parse_day(observation: dict) -> int:
     return _get(observation, "day", context="observation")
 
 
-def _parse_player(observation: dict, inventory: Inventory) -> Player:
-    """Construct Dimitri's Player from the observation.
+def _parse_hour(observation: dict) -> int:
+    """Extract the current turn-within-day from the observation."""
+    return _get(observation, "hour", context="observation")
 
-    Args:
-        observation: The raw observation dictionary.
-        inventory: Dimitri's already-parsed Inventory, reused here so
-            that Player and GameState refer to the same inventory
-            snapshot rather than parsing it twice.
+
+def _parse_player(observation: dict) -> Player:
+    """Construct Dimitri's own Player from the observation.
+
+    Combines the public farm dict at ``farms[player_id]`` with the
+    private shed and seed data, which are only ever reported for
+    Dimitri's own side of the match.
+    """
+    player_id = _get(observation, "player", context="observation")
+    farm_dict = _get_farm_dict(observation, player_id)
+
+    private = _get(observation, "private", context="observation")
+    shed = _get(private, "shed", context="observation['private']")
+    seeds = _get(private, "seeds", context="observation['private']")
+
+    money = _get(farm_dict, "money", context=f"observation['farms'][{player_id!r}]")
+    farm = _parse_farm(farm_dict, context=f"observation['farms'][{player_id!r}]")
+
+    return Player(
+        player_id=player_id,
+        money=int(money),
+        inventory=Inventory(items=dict(shed)),
+        seeds=dict(seeds),
+        farm=farm,
+    )
+
+
+def _parse_opponent(observation: dict) -> Opponent:
+    """Construct the Opponent from the observation.
+
+    Only the public farm dict for the opponent's index is available —
+    there is no private shed or seed data to parse for the opponent,
+    matching what the environment actually discloses.
     """
     player_id = _get(observation, "player", context="observation")
     farms = _get(observation, "farms", context="observation")
+    opponent_id = _opponent_id(player_id, farms)
+    farm_dict = _get_farm_dict(observation, opponent_id)
 
+    money = _get(farm_dict, "money", context=f"observation['farms'][{opponent_id!r}]")
+    farm = _parse_farm(farm_dict, context=f"observation['farms'][{opponent_id!r}]")
+
+    return Opponent(player_id=opponent_id, money=int(money), farm=farm)
+
+
+def _parse_farm(farm_dict: dict, *, context: str) -> Farm:
+    """Construct a Farm from one entry of the observation's ``farms`` list."""
+    return Farm(
+        tiles=_get(farm_dict, "tiles", context=context),
+        farmer=_get(farm_dict, "farmer", context=context),
+        hands=_get(farm_dict, "hands", context=context),
+        unlocked_quadrants=_get(farm_dict, "unlocked_quadrants", context=context),
+        hires_today=_get(farm_dict, "hires_today", context=context),
+    )
+
+
+def _parse_market(observation: dict) -> Market:
+    """Construct the shared Market from the observation's price and supply data."""
+    market = _get(observation, "market", context="observation")
+    prices = _get(market, "prices", context="observation['market']")
+    inventory = _get(market, "inventory", context="observation['market']")
+    return Market(prices=dict(prices), inventory=dict(inventory))
+
+
+def _get_farm_dict(observation: dict, player_id: Any) -> dict:
+    """Look up a single farm dict from the observation's ``farms`` list."""
+    farms = _get(observation, "farms", context="observation")
     try:
-        farm = farms[player_id]
+        return farms[player_id]
     except (IndexError, TypeError) as exc:
         raise ParseError(
             f"No entry for player {player_id!r} in observation['farms']"
         ) from exc
 
-    money = _get(farm, "money", context=f"observation['farms'][{player_id!r}]")
 
-    return Player(player_id=player_id, money=int(money), inventory=inventory)
+def _opponent_id(player_id: Any, farms: Any) -> int:
+    """Determine the opponent's index from the observation's ``farms`` list.
 
+    Rather than assuming a fixed index (e.g. ``1 - player_id``), this
+    finds the one other index present in ``farms``, so it holds
+    regardless of whether Dimitri is player 0 or player 1.
+    """
+    try:
+        other_indices = [i for i in range(len(farms)) if i != player_id]
+    except TypeError as exc:
+        raise ParseError(
+            f"Expected a sequence for observation['farms'], got {type(farms).__name__}"
+        ) from exc
 
-def _parse_inventory(observation: dict) -> Inventory:
-    """Construct Dimitri's Inventory from the observation's shed contents."""
-    private = _get(observation, "private", context="observation")
-    shed = _get(private, "shed", context="observation['private']")
-    return Inventory(items=dict(shed))
+    if len(other_indices) != 1:
+        raise ParseError(
+            f"Expected exactly one opponent in observation['farms'] besides "
+            f"player {player_id!r}, found indices {other_indices!r}"
+        )
 
-
-def _parse_market(observation: dict) -> Market:
-    """Construct the shared Market from the observation's price data."""
-    market = _get(observation, "market", context="observation")
-    prices = _get(market, "prices", context="observation['market']")
-    return Market(prices=dict(prices))
+    return other_indices[0]
 
 
 def _get(source: Mapping[str, Any], key: str, *, context: str) -> Any:

@@ -1,8 +1,9 @@
 """Represents Dimitri's own observable state within the game.
 
 Player is the canonical record of what Dimitri currently owns and
-controls at a single point in time. It is composed into GameState
-alongside Market and Inventory to form Dimitri's complete picture of
+controls at a single point in time: bank balance, held resources,
+unplanted seeds, and farm layout. It is composed into GameState
+alongside Opponent and Market to form Dimitri's complete picture of
 the world.
 
 Like GameState, Player stores facts only. It never performs reasoning,
@@ -16,8 +17,10 @@ after construction. Each new observation produces a new Player rather
 than modifying an existing one.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
+from dimitri.models.farm import Farm
 from dimitri.models.inventory import Inventory
 
 
@@ -26,9 +29,10 @@ class Player:
     """An immutable snapshot of Dimitri's own ownership state.
 
     Player is a pure data container. It represents ownership — what
-    Dimitri currently has — rather than behavior or intent. It composes
-    the Inventory model rather than flattening shed contents into
-    primitive fields, keeping related data grouped together.
+    Dimitri currently has — rather than behavior or intent. It
+    composes Inventory and Farm rather than flattening shed contents
+    or board state into primitive fields, keeping related data grouped
+    together.
 
     Player is responsible only for holding facts about Dimitri's state
     as observed at a given moment. It is explicitly not responsible for
@@ -41,8 +45,16 @@ class Player:
         player_id: Dimitri's player index in the game (0 or 1).
         money: Dimitri's current bank balance, in coins.
         inventory: Dimitri's private shed/inventory contents.
+        seeds: A mapping of crop name to the number of unplanted seeds
+            of that crop Dimitri currently holds. Seeds are tracked
+            separately from shed inventory, matching the raw
+            observation's own ``private.seeds`` / ``private.shed``
+            split.
+        farm: Dimitri's own farm board layout.
     """
 
     player_id: int
     money: int
     inventory: Inventory
+    seeds: Mapping[str, int]
+    farm: Farm

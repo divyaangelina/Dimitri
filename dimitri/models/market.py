@@ -1,16 +1,17 @@
 """Represents the shared marketplace visible to all players.
 
 Market models the current state of the economy exactly as observed
-from the Kaggle environment: what each resource currently sells for.
-It is composed into GameState alongside Player, providing Dimitri's
-factual view of the economy.
+from the Kaggle environment: what each resource currently sells for,
+and how much of it the market currently holds. It is composed into
+GameState alongside Player and Opponent, providing Dimitri's factual
+view of the economy.
 
-Prices are represented as a mapping rather than individual fields
-(e.g. ``wheat_price: int``, ``egg_price: int``) for the same reason
-Inventory stores its items as a mapping: the set of tradable resources
-is defined by the game, not by Dimitri's architecture. If a new
-resource is introduced, it simply becomes a new key in the mapping —
-no new field, no new dataclass, no migration.
+Prices and inventory are each represented as a mapping rather than
+individual fields (e.g. ``wheat_price: int``, ``wheat_inventory: int``)
+for the same reason Inventory stores its items as a mapping: the set
+of tradable resources is defined by the game, not by Dimitri's
+architecture. If a new resource is introduced, it simply becomes a new
+key in each mapping — no new field, no new dataclass, no migration.
 
 Like the other models in this package, Market stores facts only. It
 never predicts future prices, detects trends, recommends buying or
@@ -46,6 +47,11 @@ class Market:
             "FERTILIZER") to its current market price. Resources not
             present in the mapping should be treated as unpriced by
             callers, typically via ``prices.get("EGG", 0)``.
+        inventory: A mapping of resource name to the market's current
+            supply of it. This is the shared market's own stockpile
+            (what drives the price curve), distinct from anything
+            Dimitri or the opponent personally holds.
     """
 
     prices: Mapping[str, int]
+    inventory: Mapping[str, int]
