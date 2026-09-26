@@ -7,6 +7,7 @@ import pytest
 
 from dimitri.analyst.analysis import Analysis
 from dimitri.analyst.analyst import Analyst
+from dimitri.analyst.opportunity import EconomicOpportunity
 from dimitri.models.farm import Farm
 from dimitri.models.game_state import GameState
 from dimitri.models.inventory import Inventory
@@ -234,6 +235,76 @@ def test_economic_facts_leave_game_state_unchanged():
         seeds={"CARROT": 3, "PUMPKIN": 1},
         prices=dict(PRICES),
     )
+    before = copy.deepcopy(game_state)
+
+    Analyst().analyze(game_state)
+
+    assert game_state == before
+
+
+def test_one_opportunity_per_market_item():
+    analysis = Analyst().analyze(_make_game_state(prices=PRICES))
+
+    assert len(analysis.economic_opportunities) == len(PRICES)
+    assert all(
+        isinstance(opportunity, EconomicOpportunity)
+        for opportunity in analysis.economic_opportunities
+    )
+    assert {o.item for o in analysis.economic_opportunities} == set(PRICES)
+
+
+def test_opportunity_fields_match_market_price():
+    analysis = Analyst().analyze(_make_game_state(prices=PRICES))
+
+    for opportunity in analysis.economic_opportunities:
+        price = PRICES[opportunity.item]
+        assert opportunity.buy_cost == price
+        assert opportunity.sell_price == price
+        assert opportunity.gross_margin == (
+            opportunity.sell_price - opportunity.buy_cost
+        )
+        assert opportunity.gross_margin == 0
+
+
+def test_opportunity_ordering_follows_price_mapping():
+    prices = {"MILK": 160, "WHEAT": 25, "EGG": 50, "CARROT": 35}
+    analysis = Analyst().analyze(_make_game_state(prices=prices))
+
+    assert [o.item for o in analysis.economic_opportunities] == list(prices)
+
+
+def test_no_opportunities_for_empty_market():
+    analysis = Analyst().analyze(_make_game_state(prices={}))
+
+    assert analysis.economic_opportunities == ()
+
+
+def test_economic_opportunities_are_immutable():
+    analysis = Analyst().analyze(_make_game_state(prices=PRICES))
+
+    assert isinstance(analysis.economic_opportunities, tuple)
+    with pytest.raises(FrozenInstanceError):
+        analysis.economic_opportunities = ()
+    with pytest.raises(FrozenInstanceError):
+        analysis.economic_opportunities[0].buy_cost = 0
+
+
+def test_mutating_source_prices_does_not_change_opportunities():
+    prices = dict(PRICES)
+    analysis = Analyst().analyze(_make_game_state(prices=prices))
+    before = analysis.economic_opportunities
+
+    prices["WHEAT"] = 999
+    prices["NEW"] = 1
+    del prices["EGG"]
+
+    assert analysis.economic_opportunities == before
+    assert [o.item for o in analysis.economic_opportunities] == list(PRICES)
+    assert analysis.economic_opportunities[0].buy_cost == PRICES["WHEAT"]
+
+
+def test_opportunities_leave_game_state_unchanged():
+    game_state = _make_game_state(prices=dict(PRICES))
     before = copy.deepcopy(game_state)
 
     Analyst().analyze(game_state)

@@ -18,6 +18,8 @@ rather than modifying an existing one.
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from dimitri.analyst.opportunity import EconomicOpportunity
+
 
 @dataclass(frozen=True)
 class Analysis:
@@ -52,6 +54,9 @@ class Analysis:
             held seeds at current market prices: the sum of
             quantity * price over seed crops that have a market price.
             Unpriced seeds contribute nothing.
+        economic_opportunities: One EconomicOpportunity per item in
+            GameState.market.prices, in the same order as that
+            mapping. These are unranked facts, not recommendations.
     """
 
     current_day: int
@@ -66,3 +71,4 @@ class Analysis:
     market_inventory: Mapping[str, int]
     inventory_total_value: int
     seed_total_cost: int
+    economic_opportunities: tuple[EconomicOpportunity, ...]

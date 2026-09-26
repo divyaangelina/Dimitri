@@ -17,6 +17,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 
 from dimitri.analyst.analysis import Analysis
+from dimitri.analyst.opportunity import EconomicOpportunity
 from dimitri.models.game_state import GameState
 from dimitri.utils.constants import SEASON_LENGTH_DAYS
 
@@ -67,6 +68,7 @@ class Analyst:
                 game_state.player.inventory.items, prices
             ),
             seed_total_cost=_priced_total(game_state.player.seeds, prices),
+            economic_opportunities=_economic_opportunities(prices),
         )
 
 
@@ -77,3 +79,26 @@ def _priced_total(quantities: Mapping[str, int], prices: Mapping[str, int]) -> i
         for name, quantity in quantities.items()
         if name in prices
     )
+
+
+def _economic_opportunities(
+    prices: Mapping[str, int],
+) -> tuple[EconomicOpportunity, ...]:
+    """Build one EconomicOpportunity per priced item, in price-mapping order.
+
+    The GameState exposes a single price per item, so it serves as both
+    the buy cost and the sell price.
+    """
+    opportunities = []
+    for item, price in prices.items():
+        buy_cost = price
+        sell_price = price
+        opportunities.append(
+            EconomicOpportunity(
+                item=item,
+                buy_cost=buy_cost,
+                sell_price=sell_price,
+                gross_margin=sell_price - buy_cost,
+            )
+        )
+    return tuple(opportunities)
