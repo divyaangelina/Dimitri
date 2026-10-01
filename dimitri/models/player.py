@@ -44,13 +44,21 @@ class Player:
     Attributes:
         player_id: Dimitri's player index in the game (0 or 1).
         money: Dimitri's current bank balance, in coins.
-        inventory: Dimitri's private shed/inventory contents.
+        inventory: Dimitri's private shed contents
+            (``private.shed``).
         seeds: A mapping of crop name to the number of unplanted seeds
             of that crop Dimitri currently holds. Seeds are tracked
             separately from shed inventory, matching the raw
             observation's own ``private.seeds`` / ``private.shed``
             split.
         farm: Dimitri's own farm board layout.
+        unit_inventories: The items each of Dimitri's units is
+            currently carrying in the field (``private.inventories``),
+            in observation order: index 0 is the main farmer, and
+            index ``i`` (``i >= 1``) is the hand at ``farm.hands[i - 1]``.
+            These are separate from the shed. The environment deletes
+            an item's key when its count reaches zero, and resets this
+            to a single empty inventory at the end of each day.
     """
 
     player_id: int
@@ -58,3 +66,4 @@ class Player:
     inventory: Inventory
     seeds: Mapping[str, int]
     farm: Farm
+    unit_inventories: tuple[Inventory, ...]

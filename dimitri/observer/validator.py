@@ -66,6 +66,11 @@ def validate(game_state: GameState) -> None:
             f"Expected a GameState, got {type(game_state).__name__}"
         )
 
+    if not isinstance(game_state.step, int):
+        raise ValidationError(
+            f"GameState.step must be an int, got {type(game_state.step).__name__}"
+        )
+
     if not isinstance(game_state.day, int):
         raise ValidationError(
             f"GameState.day must be an int, got {type(game_state.day).__name__}"
@@ -100,6 +105,14 @@ def _validate_player(player: Player) -> None:
         )
 
     _validate_inventory(player.inventory, context="Player.inventory")
+
+    if not isinstance(player.unit_inventories, tuple):
+        raise ValidationError(
+            "Player.unit_inventories must be a tuple, got "
+            f"{type(player.unit_inventories).__name__}"
+        )
+    for index, inventory in enumerate(player.unit_inventories):
+        _validate_inventory(inventory, context=f"Player.unit_inventories[{index}]")
 
 
 def _validate_market(market: Market) -> None:

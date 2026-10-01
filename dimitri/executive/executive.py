@@ -1,27 +1,29 @@
-"""Selects the single action Dimitri commits to from a PlanningResult.
+"""Selects the complete turn Dimitri commits to from a PlanningResult.
 
-Executive answers one question: which already-evaluated action should we
+Executive answers one question: which already-evaluated turn should we
 commit to? It chooses the candidate whose Evaluation has the greatest
-total_liquid_value. Ties go to the earliest candidate, so selection is
+final_objective_value. Ties go to the earliest candidate, so selection is
 deterministic given the Planner's deterministic candidate ordering.
 
 It never generates, simulates, or evaluates candidates, never executes
 actions, and never mutates the PlanningResult or any GameState within
-it. Execution belongs to the Operator downstream.
+it. The selected Turn is returned wrapped in a Decision; writing it in
+the Kaggriculture API format and executing it belong to the Operator
+downstream.
 """
 
-from dimitri.planner.action import Action
+from dimitri.executive.decision import Decision
 from dimitri.planner.planning import PlanningResult
 
 
 class Executive:
-    """Selects one Action from a PlanningResult."""
+    """Selects one candidate from a PlanningResult as a Decision."""
 
-    def decide(self, planning_result: PlanningResult) -> Action:
-        """Return the action of the highest-valued candidate.
+    def decide(self, planning_result: PlanningResult) -> Decision:
+        """Return a Decision for the turn of the highest-valued candidate.
 
         Ties are broken by candidate order: the first candidate with the
-        greatest total_liquid_value wins.
+        greatest final_objective_value wins.
 
         Raises:
             ValueError: If ``planning_result`` has no candidates.
@@ -31,8 +33,8 @@ class Executive:
         best = planning_result.candidates[0]
         for candidate in planning_result.candidates[1:]:
             if (
-                candidate.evaluation.total_liquid_value
-                > best.evaluation.total_liquid_value
+                candidate.evaluation.final_objective_value
+                > best.evaluation.final_objective_value
             ):
                 best = candidate
-        return best.action
+        return Decision(turn=best.turn)

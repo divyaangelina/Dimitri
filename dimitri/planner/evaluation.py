@@ -1,10 +1,16 @@
 """Represents the accounting value of a single GameState.
 
 An Evaluation records what a state is worth under Dimitri's current
-accounting model: cash on hand, the market value of held inventory,
-and the replacement cost of held seeds. It describes one state only.
-It carries no judgement about actions, and it never compares or ranks
-states. Comparison belongs to the Executive downstream.
+accounting model. It separates the competition objective from
+descriptive holdings: Kaggriculture scores each player by the money they
+hold at the end of the season, so only cash counts toward the final
+objective. Inventory value and seed replacement cost describe the state
+but are not objective value, because unsold holdings earn nothing at the
+end of the season.
+
+An Evaluation describes one state only. It carries no judgement about
+actions, and it never compares or ranks states. Comparison belongs to
+the Executive downstream.
 """
 
 from dataclasses import dataclass
@@ -18,14 +24,16 @@ class Evaluation:
         cash: The player's current money.
         inventory_value: Total sale value of the player's inventory at
             current market prices. Items without a price contribute 0.
+            Descriptive only; not part of final_objective_value.
         seed_cost: Total replacement cost of the player's held seeds at
-            current market prices. Seeds without a price contribute 0.
-            Reported separately; seeds are an asset, not a debt, so this
-            is not subtracted from total_liquid_value.
-        total_liquid_value: cash + inventory_value.
+            the fixed seed prices. Seeds of an unknown crop contribute 0.
+            Descriptive only; not part of final_objective_value.
+        final_objective_value: The value of this state under the
+            competition's scoring rule: the money that would count
+            toward the final score, which is cash.
     """
 
     cash: int
     inventory_value: int
     seed_cost: int
-    total_liquid_value: int
+    final_objective_value: int

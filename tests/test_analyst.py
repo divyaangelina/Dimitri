@@ -7,13 +7,13 @@ import pytest
 
 from dimitri.analyst.analysis import Analysis
 from dimitri.analyst.analyst import Analyst
-from dimitri.analyst.opportunity import EconomicOpportunity
 from dimitri.models.farm import Farm
 from dimitri.models.game_state import GameState
 from dimitri.models.inventory import Inventory
 from dimitri.models.market import Market
 from dimitri.models.opponent import Opponent
 from dimitri.models.player import Player
+from dimitri.models.town import Town
 from dimitri.utils.constants import SEASON_LENGTH_DAYS
 
 WHEAT_TILE = {"type": "WHEAT", "planted_day": 0}
@@ -48,6 +48,7 @@ def _make_game_state(
     market_inventory=None,
 ) -> GameState:
     return GameState(
+        step=day * 24 + hour,
         day=day,
         hour=hour,
         player=Player(
@@ -56,6 +57,7 @@ def _make_game_state(
             inventory=Inventory(items={"WHEAT": 2} if shed is None else shed),
             seeds={"WHEAT": 5} if seeds is None else seeds,
             farm=_make_farm(tiles),
+            unit_inventories=(Inventory(items={}),),
         ),
         opponent=Opponent(
             player_id=1,
@@ -66,6 +68,7 @@ def _make_game_state(
             prices={"WHEAT": 25} if prices is None else prices,
             inventory={"WHEAT": 10} if market_inventory is None else market_inventory,
         ),
+        town=Town(unlocked_shops=()),
         raw_observation={"day": day, "hour": hour},
     )
 
@@ -178,7 +181,8 @@ def test_seed_total_cost():
     seeds = {"WHEAT": 5, "CARROT": 2}
     analysis = Analyst().analyze(_make_game_state(seeds=seeds, prices=PRICES))
 
-    assert analysis.seed_total_cost == 5 * 25 + 2 * 35
+    # Fixed seed prices (WHEAT 10, CARROT 20), not market sale prices.
+    assert analysis.seed_total_cost == 5 * 10 + 2 * 20
 
 
 def test_unpriced_inventory_items_are_skipped():
@@ -188,11 +192,11 @@ def test_unpriced_inventory_items_are_skipped():
     assert analysis.inventory_total_value == 2 * 25
 
 
-def test_unpriced_seed_types_are_skipped():
+def test_unknown_seed_types_are_skipped():
     seeds = {"CARROT": 1, "PUMPKIN": 9}
     analysis = Analyst().analyze(_make_game_state(seeds=seeds, prices=PRICES))
 
-    assert analysis.seed_total_cost == 35
+    assert analysis.seed_total_cost == 20
 
 
 def test_empty_holdings_value_to_zero():
@@ -242,76 +246,6 @@ def test_economic_facts_leave_game_state_unchanged():
     assert game_state == before
 
 
-def test_one_opportunity_per_market_item():
-    analysis = Analyst().analyze(_make_game_state(prices=PRICES))
-
-    assert len(analysis.economic_opportunities) == len(PRICES)
-    assert all(
-        isinstance(opportunity, EconomicOpportunity)
-        for opportunity in analysis.economic_opportunities
-    )
-    assert {o.item for o in analysis.economic_opportunities} == set(PRICES)
-
-
-def test_opportunity_fields_match_market_price():
-    analysis = Analyst().analyze(_make_game_state(prices=PRICES))
-
-    for opportunity in analysis.economic_opportunities:
-        price = PRICES[opportunity.item]
-        assert opportunity.buy_cost == price
-        assert opportunity.sell_price == price
-        assert opportunity.gross_margin == (
-            opportunity.sell_price - opportunity.buy_cost
-        )
-        assert opportunity.gross_margin == 0
-
-
-def test_opportunity_ordering_follows_price_mapping():
-    prices = {"MILK": 160, "WHEAT": 25, "EGG": 50, "CARROT": 35}
-    analysis = Analyst().analyze(_make_game_state(prices=prices))
-
-    assert [o.item for o in analysis.economic_opportunities] == list(prices)
-
-
-def test_no_opportunities_for_empty_market():
-    analysis = Analyst().analyze(_make_game_state(prices={}))
-
-    assert analysis.economic_opportunities == ()
-
-
-def test_economic_opportunities_are_immutable():
-    analysis = Analyst().analyze(_make_game_state(prices=PRICES))
-
-    assert isinstance(analysis.economic_opportunities, tuple)
-    with pytest.raises(FrozenInstanceError):
-        analysis.economic_opportunities = ()
-    with pytest.raises(FrozenInstanceError):
-        analysis.economic_opportunities[0].buy_cost = 0
-
-
-def test_mutating_source_prices_does_not_change_opportunities():
-    prices = dict(PRICES)
-    analysis = Analyst().analyze(_make_game_state(prices=prices))
-    before = analysis.economic_opportunities
-
-    prices["WHEAT"] = 999
-    prices["NEW"] = 1
-    del prices["EGG"]
-
-    assert analysis.economic_opportunities == before
-    assert [o.item for o in analysis.economic_opportunities] == list(PRICES)
-    assert analysis.economic_opportunities[0].buy_cost == PRICES["WHEAT"]
-
-
-def test_opportunities_leave_game_state_unchanged():
-    game_state = _make_game_state(prices=dict(PRICES))
-    before = copy.deepcopy(game_state)
-
-    Analyst().analyze(game_state)
-
-    assert game_state == before
-
-
 def test_cash_plus_inventory_value():
     shed = {"WHEAT": 4, "EGG": 3}
     analysis = Analyst().analyze(
@@ -327,15 +261,15 @@ def test_cash_after_seed_replacement():
         _make_game_state(money=1000, seeds=seeds, prices=PRICES)
     )
 
-    assert analysis.cash_after_seed_replacement == 1000 - (5 * 25 + 2 * 35)
+    assert analysis.cash_after_seed_replacement == 1000 - (5 * 10 + 2 * 20)
 
 
 def test_cash_after_seed_replacement_can_be_negative():
     analysis = Analyst().analyze(
-        _make_game_state(money=10, seeds={"MILK": 1}, prices=PRICES)
+        _make_game_state(money=10, seeds={"STRAWBERRY": 1}, prices=PRICES)
     )
 
-    assert analysis.cash_after_seed_replacement == 10 - 160
+    assert analysis.cash_after_seed_replacement == 10 - 100
 
 
 def test_affordable_market_items_are_exactly_affordable_items():
@@ -419,7 +353,7 @@ def test_mutating_source_mappings_does_not_change_inferences():
     seeds["CARROT"] = 1000
 
     assert analysis.cash_plus_inventory_value == 100 + 4 * 25
-    assert analysis.cash_after_seed_replacement == 100 - 2 * 35
+    assert analysis.cash_after_seed_replacement == 100 - 2 * 20
     assert analysis.affordable_market_items == ("WHEAT", "CARROT", "EGG")
 
 

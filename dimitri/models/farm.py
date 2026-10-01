@@ -19,20 +19,22 @@ after construction. Each new observation produces a new Farm rather
 than modifying an existing one.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, TypeAlias
+from typing import Literal, TypeAlias
 
-TileValue: TypeAlias = None | Literal["LOCKED"] | Mapping[str, Any]
+from dimitri.models.tile import TileContents
+
+TileValue: TypeAlias = None | Literal["LOCKED"] | TileContents
 """The value of a single tile on a farm's board.
 
 A tile is ``None`` when it is empty and unlocked, the literal string
 ``"LOCKED"`` when it sits in a quadrant the player has not yet bought,
-or a structured mapping (a plant, weed, or animal structure) when
-something occupies it. Dimitri does not yet model plant and animal
-tile contents as their own types — that modeling is out of scope for
-this ticket — so occupied tiles are represented here as opaque
-mappings rather than invented dataclasses.
+or one of the TileContents models (PlantTile, AnimalTile,
+StructureTile, WeedTile) when something occupies it. These mirror the
+environment's own representation: ``None`` and ``"LOCKED"`` are kept
+verbatim, and the environment's tile dicts are translated into the
+corresponding immutable model by the Parser.
 """
 
 
@@ -50,9 +52,9 @@ class Farm:
     Attributes:
         tiles: The farm's board, indexed as ``tiles[y][x]``. Each
             entry is a TileValue: ``None`` (empty, unlocked),
-            ``"LOCKED"`` (in an unbought quadrant), or a mapping
-            describing a plant, weed, or animal structure occupying
-            that tile.
+            ``"LOCKED"`` (in an unbought quadrant), or a TileContents
+            model describing the plant, weed, structure, or animal
+            occupying that tile.
         farmer: The ``[x, y]`` position of the main farmer on the
             board.
         hands: The ``[x, y]`` positions of each hired farm hand

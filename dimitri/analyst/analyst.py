@@ -13,13 +13,12 @@ opponent strategy, simulates future states, or builds plans. It also
 never modifies the GameState or its raw observation.
 """
 
-from collections.abc import Mapping
 from types import MappingProxyType
 
 from dimitri.analyst.analysis import Analysis
-from dimitri.analyst.opportunity import EconomicOpportunity
 from dimitri.models.game_state import GameState
 from dimitri.utils.constants import SEASON_LENGTH_DAYS
+from dimitri.utils.valuation import market_value, seed_cost
 
 
 class Analyst:
@@ -47,16 +46,17 @@ class Analyst:
                     empty += 1
                 elif tile == "LOCKED":
                     locked += 1
-                elif isinstance(tile, Mapping):
+                else:
+                    # A PlantTile, AnimalTile, StructureTile, or WeedTile.
                     occupied += 1
 
         prices = MappingProxyType(dict(game_state.market.prices))
         market_inventory = MappingProxyType(dict(game_state.market.inventory))
         money = game_state.player.money
-        inventory_total_value = _priced_total(
+        inventory_total_value = market_value(
             game_state.player.inventory.items, prices
         )
-        seed_total_cost = _priced_total(game_state.player.seeds, prices)
+        seed_total_cost = seed_cost(game_state.player.seeds)
 
         return Analysis(
             current_day=game_state.day,
@@ -71,7 +71,6 @@ class Analyst:
             market_inventory=market_inventory,
             inventory_total_value=inventory_total_value,
             seed_total_cost=seed_total_cost,
-            economic_opportunities=_economic_opportunities(prices),
             cash_plus_inventory_value=money + inventory_total_value,
             cash_after_seed_replacement=money - seed_total_cost,
             affordable_market_items=tuple(
@@ -80,34 +79,3 @@ class Analyst:
             has_empty_farm_capacity=empty > 0,
         )
 
-
-def _priced_total(quantities: Mapping[str, int], prices: Mapping[str, int]) -> int:
-    """Sum quantity * price over the entries that have a market price."""
-    return sum(
-        quantity * prices[name]
-        for name, quantity in quantities.items()
-        if name in prices
-    )
-
-
-def _economic_opportunities(
-    prices: Mapping[str, int],
-) -> tuple[EconomicOpportunity, ...]:
-    """Build one EconomicOpportunity per priced item, in price-mapping order.
-
-    The GameState exposes a single price per item, so it serves as both
-    the buy cost and the sell price.
-    """
-    opportunities = []
-    for item, price in prices.items():
-        buy_cost = price
-        sell_price = price
-        opportunities.append(
-            EconomicOpportunity(
-                item=item,
-                buy_cost=buy_cost,
-                sell_price=sell_price,
-                gross_margin=sell_price - buy_cost,
-            )
-        )
-    return tuple(opportunities)

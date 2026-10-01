@@ -18,8 +18,6 @@ rather than modifying an existing one.
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from dimitri.analyst.opportunity import EconomicOpportunity
-
 
 @dataclass(frozen=True)
 class Analysis:
@@ -51,12 +49,9 @@ class Analysis:
             Unpriced items contribute nothing. This is an accounting
             fact, not a profit or expected-value figure.
         seed_total_cost: The theoretical replacement cost of Dimitri's
-            held seeds at current market prices: the sum of
-            quantity * price over seed crops that have a market price.
-            Unpriced seeds contribute nothing.
-        economic_opportunities: One EconomicOpportunity per item in
-            GameState.market.prices, in the same order as that
-            mapping. These are unranked facts, not recommendations.
+            held seeds at the fixed seed prices (CROPS): the sum of
+            quantity * seed price over known crops. Seeds of an unknown
+            crop contribute nothing.
         cash_plus_inventory_value: current_money plus
             inventory_total_value.
         cash_after_seed_replacement: current_money minus
@@ -80,7 +75,6 @@ class Analysis:
     market_inventory: Mapping[str, int]
     inventory_total_value: int
     seed_total_cost: int
-    economic_opportunities: tuple[EconomicOpportunity, ...]
     cash_plus_inventory_value: int
     cash_after_seed_replacement: int
     affordable_market_items: tuple[str, ...]

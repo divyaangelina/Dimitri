@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from dimitri.models.market import Market
 from dimitri.models.opponent import Opponent
 from dimitri.models.player import Player
+from dimitri.models.town import Town
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,8 @@ class GameState:
     Planner, and Executive modules downstream.
 
     Attributes:
+        step: The current turn of the episode (0-indexed), as supplied
+            by the kaggle-environments framework.
         day: The current in-game day, as reported by the observation.
         hour: The current turn within the day, as reported by the
             observation.
@@ -48,14 +51,17 @@ class GameState:
             (money and farm; their private shed and seeds are never
             visible to Dimitri).
         market: The shared market state (prices and inventory).
+        town: The shared town state (unlocked shops).
         raw_observation: The unmodified observation dict from the Kaggle
             environment, retained for debugging, traceability, and to
             support future fields without requiring re-parsing.
     """
 
+    step: int
     day: int
     hour: int
     player: Player
     opponent: Opponent
     market: Market
+    town: Town
     raw_observation: dict
